@@ -35,7 +35,7 @@
 | Параметров | 537 354 |
 | Память GPU | ≈29 МБ |
 
-Артефакты: `runs/base_20261117-062330/`.
+Артефакты: `runs/base_20261117-062846/`.
 
 ## Окружение
 
@@ -47,8 +47,11 @@ uv pip install --python .venv/bin/python torch torchvision \
     --index-url https://download.pytorch.org/whl/cu128
 uv pip install --python .venv/bin/python \
     numpy matplotlib scikit-learn pyyaml tqdm pytest
-uv pip install --python .venv/bin/python -e . --no-deps
 ```
+
+Пакет намеренно не устанавливается через `pip install -e .`: скрипт запускается
+из корня проекта и импортирует `mnist_mlp` напрямую, поэтому никакие
+`egg-info` и прочие артефакты сборки не создаются.
 
 Проверка GPU:
 
@@ -113,11 +116,11 @@ runs/base_<timestamp>/
 ```
 run_training.py          единственная точка входа
 configs/base.yaml        гиперпараметры
-src/mnist_mlp/data.py    MNIST, стратифицированное разбиение, DataLoader
-src/mnist_mlp/model.py   MLP, инициализация, сборка по конфигу
-src/mnist_mlp/train.py   цикл обучения, AMP, early stopping, чекпоинты
-src/mnist_mlp/analysis.py метрики, confusion matrix, ошибки
-src/mnist_mlp/report.py  сборка report.md и report_data.json
+mnist_mlp/data.py        MNIST, стратифицированное разбиение, DataLoader
+mnist_mlp/model.py       MLP, инициализация, сборка по конфигу
+mnist_mlp/train.py       цикл обучения, AMP, early stopping, чекпоинты
+mnist_mlp/analysis.py    метрики, confusion matrix, ошибки
+mnist_mlp/report.py      сборка report.md и report_data.json
 tests/                   быстрые тесты
 runs/<run>/              результаты запуска
 ```

@@ -155,11 +155,11 @@ MLP на 54 000 (этап 1, ReLU) даёт **≥ 97 % на тестовой в�
 ```
 lab2/
 ├── run_training.py     единственная точка входа: обучение + сбор отчёта
-├── pyproject.toml / requirements.txt
+├── requirements.txt
 ├── README.md
 ├── PLAN.md
 ├── configs/            (base.yaml, stage2.yaml)
-├── src/mnist_mlp/      data.py, model.py, train.py,
+├── mnist_mlp/          data.py, model.py, train.py,
 │                       analysis.py, report.py, utils.py
 ├── data/               (MNIST, .gitignore)
 ├── runs/<run>/         (checkpoints, metrics.csv, plots, report.md)

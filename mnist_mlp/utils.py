@@ -13,7 +13,7 @@ import numpy as np
 import torch
 import yaml
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def project_path(value: str | Path) -> Path:
