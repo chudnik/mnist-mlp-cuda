@@ -22,7 +22,7 @@ def project_path(value: str | Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
-def load_config(path: str | Path = "configs/base.yaml") -> dict[str, Any]:
+def load_config(path: str | Path = "configs/relu.yaml") -> dict[str, Any]:
     config_path = project_path(path)
     with config_path.open("r", encoding="utf-8") as fh:
         config = yaml.safe_load(fh)

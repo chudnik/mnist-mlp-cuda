@@ -1,3 +1,5 @@
+# Модель tanh: один скрытый слой, 46 нейронов.
+# Отличается от configs/relu.yaml только активацией.
 seed: 42
 device: auto
 
@@ -12,7 +14,7 @@ data:
 
 model:
   hidden_neurons: 46
-  activation: relu
+  activation: tanh
   dropout: 0.2
   batchnorm: true
 

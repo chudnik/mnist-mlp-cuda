@@ -37,7 +37,7 @@ from mnist_mlp.utils import (
     timestamp,
 )
 
-BASE_CONFIG = "configs/base.yaml"
+BASE_CONFIG = "configs/relu.yaml"
 SEARCH_CONFIG = "configs/min_neurons.yaml"
 
 
