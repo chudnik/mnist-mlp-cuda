@@ -18,13 +18,13 @@ class MLP(nn.Module):
     """Полносвязная сеть: 784 -> hidden... -> 10 логитов."""
 
     def __init__(
-        self,
-        hidden: Sequence[int] = (512, 256),
-        activation: str = "relu",
-        dropout: float = 0.2,
-        batchnorm: bool = True,
-        input_dim: int = 784,
-        num_classes: int = 10,
+            self,
+            hidden: Sequence[int] = (512, 256),
+            activation: str = "relu",
+            dropout: float = 0.2,
+            batchnorm: bool = True,
+            input_dim: int = 784,
+            num_classes: int = 10,
     ) -> None:
         super().__init__()
         if activation not in ACTIVATIONS:

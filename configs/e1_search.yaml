@@ -1,0 +1,75 @@
+# Подбор конфигурации E1: 54 000 train, ReLU, оценка по validation.
+# Test используется только для победителя, один раз.
+
+screen_seed: 42
+confirm_seeds: [42, 43, 44]
+top_k: 3
+
+base_overrides:
+  training:
+    epochs: 30
+    patience: 5
+
+candidates:
+  - name: w128-64
+    overrides:
+      model: {hidden: [128, 64], dropout: 0.2}
+
+  - name: w256-128
+    overrides:
+      model: {hidden: [256, 128], dropout: 0.2}
+
+  - name: w384-192
+    overrides:
+      model: {hidden: [384, 192], dropout: 0.2}
+
+  - name: w512-256
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.2}
+
+  - name: w768-384
+    overrides:
+      model: {hidden: [768, 384], dropout: 0.2}
+
+  - name: w1024-512
+    overrides:
+      model: {hidden: [1024, 512], dropout: 0.2}
+
+  - name: w512-512
+    overrides:
+      model: {hidden: [512, 512], dropout: 0.2}
+
+  - name: w256-256
+    overrides:
+      model: {hidden: [256, 256], dropout: 0.2}
+
+  - name: w512-256-128
+    overrides:
+      model: {hidden: [512, 256, 128], dropout: 0.2}
+
+  - name: d0.0
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.0}
+
+  - name: d0.1
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.1}
+
+  - name: d0.3
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.3}
+
+  - name: lr5e-4
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.2}
+      training: {lr: 0.0005}
+
+  - name: lr2e-3
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.2}
+      training: {lr: 0.002}
+
+  - name: wd1e-3
+    overrides:
+      model: {hidden: [512, 256], dropout: 0.2}
+      training: {weight_decay: 0.001}

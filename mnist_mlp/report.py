@@ -23,9 +23,9 @@ def _table(headers: list[str], rows: list[list[str]]) -> list[str]:
 
 
 def build_report(
-    run_dir: str | Path,
-    results: dict[str, dict[str, Any]],
-    config: dict[str, Any],
+        run_dir: str | Path,
+        results: dict[str, dict[str, Any]],
+        config: dict[str, Any],
 ) -> Path:
     run_dir = Path(run_dir)
     summary = load_json(run_dir / "summary.json")

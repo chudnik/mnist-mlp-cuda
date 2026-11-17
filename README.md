@@ -43,11 +43,12 @@
 
 ```bash
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python torch torchvision \
-    --index-url https://download.pytorch.org/whl/cu128
-uv pip install --python .venv/bin/python \
-    numpy matplotlib scikit-learn pyyaml tqdm pytest
+uv pip install --python .venv/bin/python -r requirements.txt
 ```
+
+В `requirements.txt` версии PyTorch зафиксированы: `torch==2.11.0+cu128` и
+`torchvision==0.26.0+cu128`. Обновлять их по отдельности нельзя — несовместимая
+пара ломает импорт torchvision (`operator torchvision::nms does not exist`).
 
 Пакет намеренно не устанавливается через `pip install -e .`: скрипт запускается
 из корня проекта и импортирует `mnist_mlp` напрямую, поэтому никакие
@@ -80,6 +81,39 @@ data:
 training:
   epochs: 30
 ```
+
+## Подбор конфигурации E1
+
+```bash
+.venv/bin/python run_e1_selection.py
+```
+
+Скрипт читает `configs/e1_search.yaml` и работает в три шага:
+
+1. **Скрининг** 15 конфигураций на одном seed: ширины скрытых слоёв,
+   dropout, learning rate, weight decay.
+2. **Подтверждение** top-3 по validation на seed 42/43/44.
+3. **Выбор** по средней val accuracy (при равенстве — по val loss);
+   test считается только для победителя, один раз.
+
+Результаты пишутся в `runs/e1_search_<timestamp>/`: `comparison.md`,
+`comparison.csv`, `val_accuracy.png`, `search_data.json` и подкаталоги прогонов.
+
+Итог запуска `e1_search_20261117-064351`:
+
+| Конфигурация | Параметров | Val accuracy | Test accuracy |
+|---|---|---|---|
+| w1024-512 (победитель) | 1 336 842 | 98.59 ± 0.09 % | 98.30 % |
+| w768-384 | 904 330 | 98.56 ± 0.10 % | — |
+| d0.3 | 537 354 | 98.53 ± 0.25 % | — |
+| w512-256 (базовая) | 537 354 | 98.62 % (1 seed) | 98.59 % |
+
+Разница между финалистами по validation — 0.03–0.06 п.п., что меньше
+стандартной ошибки оценки (≈0.17 п.п. на test). Поэтому выбор по validation
+может не совпасть с test: в этом запуске победитель по val уступил базовой
+модели на test. Это ожидаемый winner's curse при отборе из многих конфигураций;
+для отчёта важно приводить разброс и не трактовать десятые доли процента как
+значимое превосходство.
 
 ## Конфиг
 
@@ -114,8 +148,10 @@ runs/base_<timestamp>/
 ## Структура
 
 ```
-run_training.py          единственная точка входа
+run_training.py          обучение одной конфигурации + report.md
+run_e1_selection.py      подбор E1: скрининг, подтверждение, сравнение
 configs/base.yaml        гиперпараметры
+configs/e1_search.yaml   кандидаты для подбора E1
 mnist_mlp/data.py        MNIST, стратифицированное разбиение, DataLoader
 mnist_mlp/model.py       MLP, инициализация, сборка по конфигу
 mnist_mlp/train.py       цикл обучения, AMP, early stopping, чекпоинты

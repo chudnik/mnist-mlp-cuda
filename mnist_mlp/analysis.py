@@ -19,7 +19,7 @@ CLASS_NAMES = [str(digit) for digit in range(10)]
 
 
 def load_checkpoint(
-    path: str | Path, device: torch.device
+        path: str | Path, device: torch.device
 ) -> tuple[MLP, dict[str, Any]]:
     checkpoint = torch.load(project_path(path), map_location="cpu", weights_only=False)
     model = build_model(checkpoint["config"]["model"])
@@ -31,11 +31,11 @@ def load_checkpoint(
 
 @torch.no_grad()
 def run_inference(
-    model: torch.nn.Module,
-    loader: DataLoader,
-    device: torch.device,
-    amp: bool = False,
-    amp_dtype: torch.dtype = torch.bfloat16,
+        model: torch.nn.Module,
+        loader: DataLoader,
+        device: torch.device,
+        amp: bool = False,
+        amp_dtype: torch.dtype = torch.bfloat16,
 ) -> dict[str, torch.Tensor]:
     """Возвращает логиты, вероятности, метки и исходные индексы MNIST."""
     model.eval()
@@ -47,7 +47,7 @@ def run_inference(
     for images, labels, indices in loader:
         images = images.to(device, non_blocking=True)
         with torch.autocast(
-            device_type=device.type, dtype=amp_dtype, enabled=use_amp
+                device_type=device.type, dtype=amp_dtype, enabled=use_amp
         ):
             logits = model(images)
         logits_parts.append(logits.float().cpu())
@@ -128,8 +128,8 @@ def plot_confusion(matrix: np.ndarray, path: str | Path, title: str) -> None:
 
 
 def _select_dataset(
-    split: str,
-    datasets: tuple[IndexedDataset, IndexedDataset, IndexedDataset],
+        split: str,
+        datasets: tuple[IndexedDataset, IndexedDataset, IndexedDataset],
 ) -> IndexedDataset:
     if split == "train":
         return datasets[0]
@@ -141,10 +141,10 @@ def _select_dataset(
 
 
 def evaluate_split(
-    checkpoint_path: str | Path,
-    split: str,
-    out_dir: str | Path,
-    top_errors: int = 100,
+        checkpoint_path: str | Path,
+        split: str,
+        out_dir: str | Path,
+        top_errors: int = 100,
 ) -> dict[str, Any]:
     """Считает метрики на выборке и сохраняет артефакты в out_dir."""
     device = get_device("auto")

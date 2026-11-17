@@ -82,7 +82,7 @@ def describe_device(device: torch.device) -> str:
     index = device.index or 0
     name = torch.cuda.get_device_name(index)
     capability = torch.cuda.get_device_capability(index)
-    total_gb = torch.cuda.get_device_properties(index).total_memory / 1024**3
+    total_gb = torch.cuda.get_device_properties(index).total_memory / 1024 ** 3
     return (
         f"CUDA:{index} {name} sm_{capability[0]}{capability[1]}, "
         f"{total_gb:.1f} ГБ, torch {torch.__version__}, CUDA {torch.version.cuda}"

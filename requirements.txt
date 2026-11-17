@@ -1,5 +1,9 @@
-# Установка PyTorch с CUDA выполняется отдельно (см. README):
-#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+# Пара torch/torchvision должна быть совместимой: 2.11.x ↔ 0.26.x.
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128
+
 numpy
 matplotlib
 scikit-learn

@@ -55,9 +55,9 @@ def make_transform() -> transforms.Compose:
 
 
 def stratified_split(
-    targets: np.ndarray,
-    val_ratio: float,
-    seed: int,
+        targets: np.ndarray,
+        val_ratio: float,
+        seed: int,
 ) -> Split:
     """Делит индексы по классам, сохраняя доли классов в train и val.
 
@@ -114,10 +114,10 @@ def _verify_split(split: Split, total: int) -> None:
 
 
 def load_split(
-    targets: np.ndarray,
-    cache_path: str | Path,
-    val_ratio: float,
-    seed: int,
+        targets: np.ndarray,
+        cache_path: str | Path,
+        val_ratio: float,
+        seed: int,
 ) -> Split:
     cache_path = Path(cache_path)
     if cache_path.exists():
@@ -146,9 +146,9 @@ def load_split(
 
 
 def _subset_indices(
-    indices: np.ndarray,
-    limit: int | None,
-    seed: int,
+        indices: np.ndarray,
+        limit: int | None,
+        seed: int,
 ) -> np.ndarray:
     if limit is None or limit >= indices.size:
         return indices
@@ -158,7 +158,7 @@ def _subset_indices(
 
 
 def build_datasets(
-    config: dict[str, Any],
+        config: dict[str, Any],
 ) -> tuple[IndexedDataset, IndexedDataset, IndexedDataset, dict[str, Any]]:
     """Возвращает train/val/test датасеты и метаданные разбиения."""
     data_cfg = config["data"]
@@ -208,12 +208,12 @@ def build_datasets(
 
 
 def build_loader(
-    dataset: Dataset,
-    batch_size: int,
-    shuffle: bool,
-    num_workers: int,
-    device: torch.device,
-    seed: int = 0,
+        dataset: Dataset,
+        batch_size: int,
+        shuffle: bool,
+        num_workers: int,
+        device: torch.device,
+        seed: int = 0,
 ) -> DataLoader:
     generator = torch.Generator()
     generator.manual_seed(seed)

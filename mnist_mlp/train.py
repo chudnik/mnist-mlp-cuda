@@ -40,7 +40,7 @@ CSV_COLUMNS = [
 
 
 def _activation_saturation(
-    model: nn.Module, images: torch.Tensor
+        model: nn.Module, images: torch.Tensor
 ) -> float | None:
     """Доля насыщенных tanh-нейронов (|a| > 0.99) на одном батче."""
     values: list[float] = []
@@ -65,15 +65,15 @@ def _activation_saturation(
 
 
 def _train_epoch(
-    model: nn.Module,
-    loader: torch.utils.data.DataLoader,
-    criterion: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-    amp: bool,
-    amp_dtype: torch.dtype,
-    scaler: torch.amp.GradScaler | None,
-    grad_clip: float | None,
+        model: nn.Module,
+        loader: torch.utils.data.DataLoader,
+        criterion: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        device: torch.device,
+        amp: bool,
+        amp_dtype: torch.dtype,
+        scaler: torch.amp.GradScaler | None,
+        grad_clip: float | None,
 ) -> tuple[float, float]:
     model.train()
     total_loss = 0.0
@@ -86,7 +86,7 @@ def _train_epoch(
 
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(
-            device_type=device.type, dtype=amp_dtype, enabled=amp
+                device_type=device.type, dtype=amp_dtype, enabled=amp
         ):
             logits = model(images)
             loss = criterion(logits, labels)
@@ -112,12 +112,12 @@ def _train_epoch(
 
 
 def _validation(
-    model: nn.Module,
-    loader: torch.utils.data.DataLoader,
-    criterion: nn.Module,
-    device: torch.device,
-    amp: bool,
-    amp_dtype: torch.dtype,
+        model: nn.Module,
+        loader: torch.utils.data.DataLoader,
+        criterion: nn.Module,
+        device: torch.device,
+        amp: bool,
+        amp_dtype: torch.dtype,
 ) -> tuple[float, float]:
     output = run_inference(
         model, loader, device, amp=amp, amp_dtype=amp_dtype
@@ -161,9 +161,11 @@ def _plot_history(history: list[dict[str, Any]], path: Path) -> None:
 
 
 def train(
-    config: dict[str, Any],
-    name: str = "base",
+        config: dict[str, Any],
+        name: str = "base",
+        verbose: bool = True,
 ) -> Path:
+    log = print if verbose else (lambda *args, **kwargs: None)
     device = get_device(config.get("device", "auto"))
     seed = int(config.get("seed", 42))
     set_seed(seed)
@@ -175,7 +177,7 @@ def train(
     train_cfg = config["training"]
     data_cfg = config["data"]
 
-    print(f"Устройство: {describe_device(device)}")
+    log(f"Устройство: {describe_device(device)}")
 
     train_ds, val_ds, _, meta = build_datasets(config)
     train_loader = build_loader(
@@ -195,15 +197,15 @@ def train(
         seed=seed,
     )
 
-    print(
+    log(
         f"Данные: train {meta['train_size']}, val {meta['val_size']}, "
         f"test {meta['test_size']} (val_ratio={meta['val_ratio']})"
     )
-    print(f"Классы train: {class_distribution(train_ds)}")
-    print(f"Классы val:   {class_distribution(val_ds)}")
+    log(f"Классы train: {class_distribution(train_ds)}")
+    log(f"Классы val:   {class_distribution(val_ds)}")
 
     model = build_model(config["model"]).to(device)
-    print(
+    log(
         f"Модель: {config['model']['hidden']} {config['model']['activation']}, "
         f"dropout={config['model']['dropout']}, "
         f"параметров={count_parameters(model):,}"
@@ -285,7 +287,7 @@ def train(
                 )
 
             gpu_mem_mb = (
-                torch.cuda.max_memory_allocated(device) / 1024**2
+                torch.cuda.max_memory_allocated(device) / 1024 ** 2
                 if device.type == "cuda"
                 else 0.0
             )
@@ -305,7 +307,7 @@ def train(
             csv_file.flush()
             history.append(row)
 
-            print(
+            log(
                 f"эпоха {epoch:2d}/{epochs} | "
                 f"train loss {train_loss:.4f} acc {train_acc * 100:5.2f}% | "
                 f"val loss {val_loss:.4f} acc {val_acc * 100:5.2f}% | "
@@ -353,7 +355,7 @@ def train(
             )
 
             if bad_epochs >= patience:
-                print(
+                log(
                     f"Early stopping: val loss не улучшается {bad_epochs} эпох"
                 )
                 break
@@ -378,10 +380,10 @@ def train(
     }
     save_json(summary, run_dir / "summary.json")
 
-    print(
+    log(
         f"\nГотово за {elapsed:.1f} с. Лучшая эпоха {best_epoch}: "
         f"val loss {best_val_loss:.4f}, val acc {best_val_acc * 100:.2f}%"
     )
-    print(f"Чекпоинт: {run_dir / 'best.pt'}")
-    print(f"Логи:     {run_dir / 'metrics.csv'}")
+    log(f"Чекпоинт: {run_dir / 'best.pt'}")
+    log(f"Логи:     {run_dir / 'metrics.csv'}")
     return run_dir
