@@ -11,7 +11,7 @@ data:
   limit_val: null
 
 model:
-  hidden_neurons: 512
+  hidden_neurons: 46
   activation: relu
   dropout: 0.2
   batchnorm: true
