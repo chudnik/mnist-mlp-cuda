@@ -171,6 +171,34 @@ training:
 
 Артефакты: `runs/stage2_20261117-182941/`.
 
+## Сводка E1–E5
+
+```bash
+.venv/bin/python run_summary.py
+```
+
+Скрипт собирает уже выполненные прогоны и создаёт `runs/summary_<timestamp>/`:
+
+- `summary.md` — сводная таблица E1–E5, сходимость и разбивка по прогонам;
+- `summary.csv` — агрегаты по экспериментам;
+- `runs.csv` — все прогоны;
+- `convergence.csv` — эпохи достижения val 95 % и 98 %;
+- `learning_curves.png` — loss и accuracy по эпохам для E1–E4 (seed 42);
+- `summary_accuracy.png` — test accuracy с разбросом и val accuracy;
+- `summary_data.json` — все числа и пути.
+
+| Эксперимент | Train | Активация | Test acc | Val acc | Train acc | Зазор |
+|---|---|---|---|---|---|---|
+| E1 | 54 000 | relu | 97.08 % | 96.92 % | 98.94 % | 1.86 п.п. |
+| E2 | 20 000 | tanh | 94.24 ± 0.22 % | 93.73 ± 0.10 % | 98.80 % | 4.57 п.п. |
+| E3 | 20 000 | relu | 95.58 ± 0.16 % | 95.24 ± 0.23 % | 99.09 % | 3.51 п.п. |
+| E4 | 54 000 | tanh | 96.21 % | 95.70 % | 98.56 % | 2.35 п.п. |
+| E5 | 54 000 | relu | 97.13 ± 0.11 % | 96.87 ± 0.12 % | 99.08 % | 1.95 п.п. |
+
+Сходимость: на 54k ReLU доходит до val 95 % за 4 эпохи, tanh — за 13;
+на 20k ReLU — за 19 эпох, tanh не достигает 95 % ни на одном seed. До val
+98 % не доходит ни один эксперимент.
+
 ## Конфиг
 
 `configs/relu.yaml` и `configs/tanh.yaml` (отличаются только `model.activation`):
@@ -208,6 +236,7 @@ runs/base_<timestamp>/
 run_training.py          обучение ReLU-модели + report.md
 run_training_tanh.py     обучение tanh-модели + report.md
 run_stage2.py            этап 2: 20k, tanh/ReLU, 3 seed'а
+run_summary.py           сводка E1–E5: таблицы, сходимость, графики
 run_min_neurons.py       поиск минимальной ширины скрытого слоя, 5 seed'ов
 configs/relu.yaml        гиперпараметры ReLU-модели
 configs/tanh.yaml        гиперпараметры tanh-модели
