@@ -35,7 +35,7 @@ def build_report(
     test = results["test"]
 
     gap = results["train"]["accuracy"] - test["accuracy"]
-    hidden = "-".join(str(width) for width in model_cfg["hidden"])
+    hidden = str(model_cfg["hidden_neurons"])
 
     lines: list[str] = [
         "# Отчёт об обучении MLP на MNIST",

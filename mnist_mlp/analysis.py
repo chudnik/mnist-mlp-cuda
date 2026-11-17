@@ -238,3 +238,40 @@ def evaluate_split(
         f"macro F1 {metrics['macro_f1'] * 100:.2f} %"
     )
     return payload
+
+
+def accuracy_on_split(
+    checkpoint_path: str | Path,
+    split: str = "test",
+    batch_size: int = 512,
+    device_preference: str = "auto",
+) -> float:
+    """Быстрая accuracy на выборке без сохранения артефактов."""
+    device = get_device(device_preference)
+    model, checkpoint = load_checkpoint(checkpoint_path, device)
+    config = copy.deepcopy(checkpoint["config"])
+    config["data"]["limit_train"] = None
+    config["data"]["limit_val"] = None
+    config["data"]["batch_size"] = batch_size
+
+    datasets = build_datasets(config)[:3]
+    dataset = _select_dataset(split, datasets)
+    loader = build_loader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=int(config["data"]["num_workers"]),
+        device=device,
+        seed=int(config.get("seed", 42)),
+    )
+    result = run_inference(
+        model,
+        loader,
+        device,
+        amp=bool(config["training"].get("amp", True)),
+        amp_dtype=torch.float16
+        if config["training"].get("amp_dtype", "bf16") == "fp16"
+        else torch.bfloat16,
+    )
+    correct = (result["logits"].argmax(dim=1) == result["labels"]).float().mean()
+    return float(correct)

@@ -34,7 +34,7 @@ def test_stratified_split_is_reproducible() -> None:
 
 
 def test_mlp_output_shape() -> None:
-    model = MLP(hidden=(16, 8), dropout=0.0)
+    model = MLP(hidden_neurons=16, dropout=0.0)
     model.eval()
     output = model(torch.randn(4, 1, 28, 28))
     assert output.shape == (4, 10)
@@ -43,7 +43,7 @@ def test_mlp_output_shape() -> None:
 def test_tanh_model_builds_and_runs() -> None:
     model = build_model(
         {
-            "hidden": [32, 16],
+            "hidden_neurons": 32,
             "activation": "tanh",
             "dropout": 0.1,
             "batchnorm": True,
@@ -56,7 +56,7 @@ def test_tanh_model_builds_and_runs() -> None:
 
 
 def test_mlp_flattens_input() -> None:
-    model = MLP(hidden=(8,), dropout=0.0)
+    model = MLP(hidden_neurons=8, dropout=0.0)
     model.eval()
     flat = torch.flatten(torch.ones(2, 1, 28, 28), start_dim=1)
     assert torch.allclose(model(flat), model(torch.ones(2, 1, 28, 28)))

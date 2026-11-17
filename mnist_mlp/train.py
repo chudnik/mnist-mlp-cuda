@@ -206,7 +206,8 @@ def train(
 
     model = build_model(config["model"]).to(device)
     log(
-        f"Модель: {config['model']['hidden']} {config['model']['activation']}, "
+        f"Модель: 784-{config['model']['hidden_neurons']}-10 "
+        f"{config['model']['activation']}, "
         f"dropout={config['model']['dropout']}, "
         f"параметров={count_parameters(model):,}"
     )
