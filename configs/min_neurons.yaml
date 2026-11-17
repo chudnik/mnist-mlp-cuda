@@ -2,8 +2,8 @@
 # Идём от start_neurons с шагом step, на каждой ширине — seeds прогонов.
 # Остановка, когда test accuracy каждого seed'а >= target_accuracy.
 
-start_neurons: 16
-step: 16
+start_neurons: 32
+step: 1
 max_neurons: 512
 seeds: [42, 43, 44, 45, 46]
 target_accuracy: 0.97
