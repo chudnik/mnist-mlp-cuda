@@ -22,6 +22,23 @@ RUN_NAME = "relu"
 
 
 def run(config_path: str = CONFIG_PATH, run_name: str = RUN_NAME) -> Path:
+    """Полный пайплайн одного эксперимента: обучение -> оценка -> отчёт.
+
+    Аргументы:
+        config_path: путь к YAML-конфигу (по умолчанию configs/relu.yaml).
+        run_name: префикс каталога запуска (relu/tanh), чтобы сводные
+            скрипты могли найти нужные прогоны по маске runs/relu_*.
+
+    Шаги:
+      1. ``train`` обучает модель и возвращает каталог runs/<name>_<time>/.
+      2. Лучший чекпоинт (best.pt) оценивается на train, val и test;
+         для каждой выборки в свой подкаталог eval_<split>/ пишутся
+         метрики, confusion matrix и список ошибок.
+      3. ``build_report`` собирает report.md и report_data.json.
+
+    Test здесь используется только для финальной оценки: гиперпараметры
+    уже зафиксированы, поэтому подглядывания в тест нет.
+    """
     config = load_config(config_path)
     run_dir = train(config, name=run_name)
 
@@ -40,6 +57,7 @@ def run(config_path: str = CONFIG_PATH, run_name: str = RUN_NAME) -> Path:
 
 
 def main() -> None:
+    """Точка входа при запуске файла напрямую: обучение ReLU-конфига."""
     run()
 
 

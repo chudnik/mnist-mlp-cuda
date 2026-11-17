@@ -1,4 +1,9 @@
-"""Однослойный скрытый MLP с настраиваемым числом нейронов."""
+"""Однослойный скрытый MLP с настраиваемым числом нейронов.
+
+Модель принципиально простая: вход 784 (28×28), один скрытый слой и
+10 выходных логитов (по одному на цифру). Глубина фиксирована, меняется
+только ширина скрытого слоя — это требование эксперимента E5.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,7 @@ from typing import Iterable
 import torch
 from torch import nn
 
+# Поддерживаемые активации. Словарь позволяет выбрать класс по строке из YAML.
 ACTIVATIONS: dict[str, type[nn.Module]] = {
     "relu": nn.ReLU,
     "tanh": nn.Tanh,
@@ -15,9 +21,12 @@ ACTIVATIONS: dict[str, type[nn.Module]] = {
 
 
 class MLP(nn.Module):
-    """784 -> hidden_neurons -> 10 логитов.
+    """Полносвязная сеть 784 -> hidden_neurons -> 10.
 
-    Скрытый слой всегда один; его шириной управляет hidden_neurons.
+    Порядок слоёв скрытого блока:
+        Linear -> BatchNorm (опционально) -> активация -> Dropout (опционально)
+    Затем идёт выходной Linear без активации: он выдаёт логиты, а мягкий
+    максимум применяется внутри CrossEntropyLoss при обучении.
     """
 
     def __init__(
@@ -29,6 +38,16 @@ class MLP(nn.Module):
         input_dim: int = 784,
         num_classes: int = 10,
     ) -> None:
+        """Создаёт слои модели по числу нейронов и настройкам регуляризации.
+
+        Аргументы:
+            hidden_neurons: ширина единственного скрытого слоя.
+            activation: имя активации из ACTIVATIONS.
+            dropout: вероятность отключения нейрона (0 отключает Dropout).
+            batchnorm: добавлять ли BatchNorm1d после скрытого Linear.
+            input_dim: размер входа (784 для MNIST 28×28).
+            num_classes: число классов (10 цифр).
+        """
         super().__init__()
         if activation not in ACTIVATIONS:
             raise ValueError(
@@ -40,6 +59,7 @@ class MLP(nn.Module):
                 f"получено {hidden_neurons}"
             )
 
+        # Запоминаем настройки: они нужны для инициализации и для отчёта.
         self.activation_name = activation
         self.input_dim = input_dim
         self.hidden_neurons = int(hidden_neurons)
@@ -54,10 +74,17 @@ class MLP(nn.Module):
             layers.append(nn.Dropout(dropout))
         layers.append(nn.Linear(self.hidden_neurons, num_classes))
 
+        # Sequential хранит блоки в том порядке, в котором они применяются.
         self.features = nn.Sequential(*layers)
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Инициализирует веса Linear-слоёв.
+
+        Для ReLU используется Kaiming/He, для tanh и gelu — Xavier/Glorot.
+        Смещения обнуляются: это стандартная практика, BatchNorm всё равно
+        сдвигает активации.
+        """
         for module in self.modules():
             if not isinstance(module, nn.Linear):
                 continue
@@ -71,10 +98,13 @@ class MLP(nn.Module):
                 nn.init.zeros_(module.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Прямой проход: изображение (N,1,28,28) или (N,784) -> логиты (N,10)."""
+        # flatten(1) превращает каждый тензор изображения в вектор длины 784.
         x = x.flatten(1)
         return self.features(x)
 
     def activation_modules(self) -> Iterable[nn.Module]:
+        """Перебирает модули активации (используется для мониторинга tanh)."""
         return (
             module
             for module in self.modules()
@@ -83,6 +113,12 @@ class MLP(nn.Module):
 
 
 def build_model(model_cfg: dict) -> MLP:
+    """Собирает MLP по секции model из YAML-конфига.
+
+    Ожидает обязательный ключ hidden_neurons (число нейронов скрытого слоя)
+    и опциональные activation, dropout, batchnorm. Списки слоёв больше не
+    поддерживаются: по условию задачи скрытый слой всегда один.
+    """
     if "hidden_neurons" not in model_cfg:
         raise ValueError("В конфиге модели нет hidden_neurons (число нейронов)")
 

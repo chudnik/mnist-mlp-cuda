@@ -57,6 +57,24 @@ def run_experiment(
     seed: int,
     root: Path,
 ) -> dict[str, Any]:
+    """Обучает и оценивает один прогон этапа 2 и возвращает его запись.
+
+    Аргументы:
+        experiment: описание эксперимента из EXPERIMENTS (id, name, label,
+            activation, путь к конфигу).
+        seed: seed прогона. Он же определяет случайное подмножество 20 000
+            объектов (см. build_datasets: subset seed = config seed + 1).
+        root: каталог stage2_<timestamp>/, внутри него создаётся runs/.
+
+    Порядок действий:
+      1. Читает конфиг, подставляет seed и выходной каталог.
+      2. Обучает модель (verbose=False — сводка печатается в main).
+      3. Оценивает best.pt на test и сохраняет eval_test/.
+      4. Возвращает плоский словарь с метриками и путями для таблиц.
+
+    ``subset_hash`` в записи — хэш конкретного подмножества; по нему видно,
+    что три seed'а действительно обучались на разных 20 000 объектах.
+    """
     config = load_config(experiment["config"])
     config["seed"] = int(seed)
     config["output"]["dir"] = str(root / "runs")
@@ -90,6 +108,13 @@ def run_experiment(
 
 
 def aggregate(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Считает средние и std по seed'ам для каждого эксперимента.
+
+    Возвращает словарь {id эксперимента: статистика}. Для одного прогона
+    std принудительно равен 0.0 (statistics.stdev требует >= 2 значений).
+    Кроме средних сохраняются минимум test accuracy, среднее число эпох и
+    среднее время — они нужны для таблиц и выводов.
+    """
     stats: dict[str, dict[str, Any]] = {}
     for experiment in EXPERIMENTS:
         rows = [
@@ -141,6 +166,16 @@ def write_outputs(
     stats: dict[str, dict[str, Any]],
     references: dict[str, dict[str, Any] | None],
 ) -> None:
+    """Сохраняет stage2.csv и stage2.md.
+
+    stage2.csv — плоская таблица всех прогонов (по строке на seed).
+    stage2.md содержит:
+      * сводку по экспериментам (mean ± std, min, val, F1, параметры);
+      * разбивку по seed'ам;
+      * сравнение с этапом 1 (54k): E1 для ReLU и E4 для tanh, если
+        соответствующие отчёты нашлись;
+      * числовые выводы: эффект активации при 20k и эффект объёма выборки.
+    """
     fields = [
         "experiment",
         "label",
@@ -272,6 +307,12 @@ def plot_results(
     stats: dict[str, dict[str, Any]],
     references: dict[str, dict[str, Any] | None],
 ) -> None:
+    """Рисует сравнительный график этапа 2: столбцы mean ± std по 3 seed'ам.
+
+    Дополнительно проводит горизонтальные линии — результаты этапа 1 на
+    54 000 (E1 ReLU и E4 tanh), чтобы визуально оценить падение точности
+    из-за уменьшения обучающей выборки до 20 000.
+    """
     labels = [stats[experiment["id"]]["label"] for experiment in EXPERIMENTS
               if experiment["id"] in stats]
     means = [stats[experiment["id"]]["test_mean"] * 100
@@ -314,6 +355,13 @@ def plot_results(
 
 
 def main() -> None:
+    """Точка входа этапа 2: прогоняет E2/E3 по трём seed'ам и собирает отчёт.
+
+    Создаёт runs/stage2_<timestamp>/, последовательно обучает 2 эксперимента
+    × 3 seed'а (всего 6 моделей), затем агрегирует результаты, находит
+    последние отчёты этапа 1 для сравнения и сохраняет stage2.md,
+    stage2.csv, stage2_accuracy.png и stage2_data.json.
+    """
     root = project_path("runs") / f"stage2_{timestamp()}"
     root.mkdir(parents=True, exist_ok=True)
 

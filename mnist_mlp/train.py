@@ -1,4 +1,18 @@
-"""Цикл обучения MLP на MNIST с CUDA, AMP, early stopping и чекпоинтами."""
+"""Цикл обучения MLP на MNIST с CUDA, AMP, early stopping и чекпоинтами.
+
+Главная функция модуля — ``train()``. Она:
+  1. выбирает устройство и фиксирует seed;
+  2. собирает train/val датасеты и DataLoader'ы;
+  3. создаёт модель строго по конфигу (один скрытый слой);
+  4. обучает с CrossEntropy, AdamW и (опционально) AMP/fp16-scaler;
+  5. каждую эпоху пишет строку в metrics.csv;
+  6. сохраняет best.pt (лучший val loss) и last.pt;
+  7. останавливается по early stopping;
+  8. сохраняет summary.json и рисует curves.png.
+
+Test-выборка здесь не используется: она нужна только для финальной оценки
+в report.py, чтобы не подбирать гиперпараметры по тесту.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +40,8 @@ from .utils import (
     timestamp,
 )
 
+# Колонки metrics.csv. Порядок фиксирован, чтобы файл было удобно читать
+# pandas'ом и сравнивать между запусками.
 CSV_COLUMNS = [
     "epoch",
     "train_loss",
@@ -42,11 +58,25 @@ CSV_COLUMNS = [
 def _activation_saturation(
         model: nn.Module, images: torch.Tensor
 ) -> float | None:
-    """Доля насыщенных tanh-нейронов (|a| > 0.99) на одном батче."""
+    """Доля насыщенных tanh-нейронов (|a| > 0.99) на одном батче.
+
+    Зачем это нужно: у tanh производная при |a| -> 1 стремится к нулю, и
+    нейроны перестают обучаться («насыщение»). Метрика показывает, какая
+    доля выходов tanh уже упёрлась в ±1. Если она близка к 100 %, сеть
+    фактически не учится.
+
+    Реализация: временно вешаем forward hook на каждый слой ``nn.Tanh``,
+    делаем один проход и усредняем долю насыщенных значений по всем слоям
+    активации. Для ReLU-модели возвращается None — там такого понятия нет.
+
+    Важно: модель на время замера переводится в eval и потом возвращается в
+    исходный режим, чтобы BatchNorm/Dropout не влияли на замер.
+    """
     values: list[float] = []
     handles = []
 
     def hook(_module: nn.Module, _inputs: Any, output: torch.Tensor) -> None:
+        """Считает долю элементов выхода tanh с модулем больше 0.99."""
         values.append(float((output.detach().abs() > 0.99).float().mean()))
 
     for module in model.modules():
@@ -59,6 +89,7 @@ def _activation_saturation(
     with torch.no_grad():
         model(images)
     model.train(was_training)
+    # Хуки обязательно снимаем, иначе они накопятся при следующем вызове.
     for handle in handles:
         handle.remove()
     return float(sum(values) / len(values)) if values else None
@@ -75,12 +106,28 @@ def _train_epoch(
         scaler: torch.amp.GradScaler | None,
         grad_clip: float | None,
 ) -> tuple[float, float]:
+    """Одна эпоха обучения; возвращает (средний loss, accuracy).
+
+    Пошагово для каждого батча:
+      1. переносит изображения и метки на устройство;
+      2. обнуляет градиенты (set_to_none=True — быстрее и экономнее);
+      3. прямой проход и loss внутри autocast (если AMP включён);
+      4. обратный проход: со scaler'ом для fp16 или обычный для bf16/fp32;
+      5. опционально обрезает норму градиента (grad_clip);
+      6. шаг оптимизатора.
+
+    Loss и accuracy накапливаются взвешенно по размеру батча, поэтому
+    последний неполный батч не искажает среднее. Возвращаемые значения
+    считаются по всем объектам эпохи, а не как среднее по батчам.
+    """
+    # train() включает Dropout и режим обучения BatchNorm.
     model.train()
     total_loss = 0.0
     correct = 0
     total = 0
 
     for images, labels, _ in loader:
+        # Третий элемент (исходный индекс) при обучении не нужен.
         images = images.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
@@ -92,6 +139,8 @@ def _train_epoch(
             loss = criterion(logits, labels)
 
         if scaler is not None and scaler.is_enabled():
+            # fp16 требует масштабирования loss, чтобы мелкие градиенты не
+            # превращались в ноль. unscale_ нужен перед clip_grad_norm_.
             scaler.scale(loss).backward()
             if grad_clip:
                 scaler.unscale_(optimizer)
@@ -104,6 +153,7 @@ def _train_epoch(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
 
+        # Домножаем на размер батча, чтобы в конце поделить на total.
         total_loss += float(loss.detach()) * labels.size(0)
         correct += int((logits.argmax(dim=1) == labels).sum())
         total += labels.size(0)
@@ -119,6 +169,15 @@ def _validation(
         amp: bool,
         amp_dtype: torch.dtype,
 ) -> tuple[float, float]:
+    """Считает loss и accuracy на validation без изменения весов.
+
+    Использует ``run_inference`` (режим eval, без графа), поэтому Dropout
+    выключен, а BatchNorm работает по накопленной статистике. Loss считается
+    по логитам через ``cross_entropy``, accuracy — по argmax.
+
+    Именно val loss управляет early stopping и выбором best.pt, а не test:
+    тест должен оставаться независимым до финального отчёта.
+    """
     output = run_inference(
         model, loader, device, amp=amp, amp_dtype=amp_dtype
     )
@@ -130,6 +189,12 @@ def _validation(
 
 
 def _plot_history(history: list[dict[str, Any]], path: Path) -> None:
+    """Рисует кривые loss и accuracy по эпохам и сохраняет PNG.
+
+    Слева — train/val loss, справа — train/val accuracy в процентах.
+    График позволяет увидеть переобучение: train loss падает, val loss
+    начинает расти. Используется Agg-бэкенд matplotlib (без дисплея).
+    """
     if not history:
         return
     import matplotlib
@@ -165,11 +230,38 @@ def train(
         name: str = "base",
         verbose: bool = True,
 ) -> Path:
+    """Обучает модель по конфигу и возвращает каталог запуска.
+
+    Аргументы:
+        config: полный словарь конфига (секции data/model/training/output).
+        name: префикс имени каталога запуска, например "relu" или "tanh".
+        verbose: печатать ли прогресс; False используется в массовых
+            прогонах (поиск ширины), чтобы не засорять вывод.
+
+    Что сохраняется в ``runs/<name>_<timestamp>/``:
+        config.yaml    — точная копия конфига (воспроизводимость);
+        data_split.json— метаданные разбиения и подмножества;
+        metrics.csv    — по строке на эпоху;
+        best.pt        — веса эпохи с минимальным val loss;
+        last.pt        — веса последней эпохи;
+        curves.png     — графики обучения;
+        summary.json   — итог: лучшая эпоха, метрики, время, параметры.
+
+    Почему лучший чекпоинт выбирается по val loss, а не по val accuracy:
+    loss — более гладкая величина, accuracy на 6 000 объектов дискретна
+    (шаг 1/6000 ≈ 0.017 %) и чаще даёт «плато» с случайными колебаниями.
+
+    Early stopping: если val loss не улучшается ``patience`` эпох подряд
+    (с учётом ``min_delta``), обучение останавливается.
+    """
+    # Если verbose=False, log становится функцией, которая ничего не делает.
     log = print if verbose else (lambda *args, **kwargs: None)
     device = get_device(config.get("device", "auto"))
     seed = int(config.get("seed", 42))
     set_seed(seed)
     if device.type == "cuda":
+        # benchmark подбирает самые быстрые свёрточные алгоритмы (для Linear
+        # почти не влияет), TF32 ускоряет matmul на Ampere+.
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
@@ -201,6 +293,7 @@ def train(
         f"Данные: train {meta['train_size']}, val {meta['val_size']}, "
         f"test {meta['test_size']} (val_ratio={meta['val_ratio']})"
     )
+    # Распределение классов печатается, чтобы сразу видеть стратификацию.
     log(f"Классы train: {class_distribution(train_ds)}")
     log(f"Классы val:   {class_distribution(val_ds)}")
 
@@ -219,6 +312,8 @@ def train(
         weight_decay=float(train_cfg.get("weight_decay", 0.0)),
     )
 
+    # Планировщик необязателен: включается только при scheduler: plateau.
+    # Он уменьшает lr, когда val loss перестаёт падать.
     scheduler = None
     if train_cfg.get("scheduler") == "plateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -234,11 +329,14 @@ def train(
         if train_cfg.get("amp_dtype", "bf16") == "fp16"
         else torch.bfloat16
     )
+    # AMP имеет смысл только на CUDA; на CPU всегда обычный float32.
     amp = bool(train_cfg.get("amp", True)) and device.type == "cuda"
     scaler = None
     if amp and amp_dtype == torch.float16:
+        # bf16 не требует scaler'а, fp16 — требует.
         scaler = torch.amp.GradScaler("cuda", enabled=True)
 
+    # Каталог запуска уникален благодаря timestamp.
     run_dir = project_path(config["output"]["dir"]) / f"{name}_{timestamp()}"
     run_dir.mkdir(parents=True, exist_ok=True)
     save_config(config, run_dir / "config.yaml")
@@ -251,10 +349,13 @@ def train(
     best_epoch = 0
     bad_epochs = 0
     patience = int(train_cfg.get("patience", 5))
+    # min_delta — минимальное улучшение, которое считается реальным.
     min_delta = float(train_cfg.get("min_delta", 0.0))
     epochs = int(train_cfg["epochs"])
     started = time.time()
 
+    # metrics.csv открыт на запись всё обучение и сбрасывается на диск
+    # после каждой эпохи: если процесс упадёт, прогресс сохранится.
     with metrics_path.open("w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=CSV_COLUMNS)
         writer.writeheader()
@@ -280,6 +381,7 @@ def train(
             lr = float(optimizer.param_groups[0]["lr"])
             seconds = time.time() - epoch_started
 
+            # Диагностика насыщения tanh — только для tanh-моделей.
             saturation = None
             if config["model"]["activation"] == "tanh":
                 preview, _, _ = next(iter(val_loader))
@@ -287,6 +389,7 @@ def train(
                     model, preview[:256].to(device)
                 )
 
+            # Пиковая память GPU с начала процесса — попадает в отчёт.
             gpu_mem_mb = (
                 torch.cuda.max_memory_allocated(device) / 1024 ** 2
                 if device.type == "cuda"
@@ -302,6 +405,7 @@ def train(
                 "lr": lr,
                 "seconds": seconds,
                 "gpu_mem_mb": gpu_mem_mb,
+                # Пустая строка вместо None: CSV не умеет хранить None.
                 "tanh_saturated": "" if saturation is None else saturation,
             }
             writer.writerow(row)
@@ -321,6 +425,8 @@ def train(
                 )
             )
 
+            # Улучшение фиксируется только если val loss упал больше чем
+            # на min_delta; тогда же обновляется best.pt.
             improved = val_loss < best_val_loss - min_delta
             if improved:
                 best_val_loss = val_loss
@@ -342,6 +448,8 @@ def train(
             else:
                 bad_epochs += 1
 
+            # last.pt перезаписывается каждую эпоху — полезно, если нужно
+            # посмотреть, что было после early stopping.
             torch.save(
                 {
                     "model_state": model.state_dict(),
@@ -364,6 +472,7 @@ def train(
     elapsed = time.time() - started
     _plot_history(history, run_dir / "curves.png")
 
+    # summary.json — компактный итог запуска для сводных таблиц.
     summary = {
         "run_dir": str(run_dir),
         "device": describe_device(device),
@@ -372,6 +481,7 @@ def train(
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "best_val_acc": best_val_acc,
+        # True, если обучение прервалось раньше запланированного числа эпох.
         "early_stopped": len(history) < epochs,
         "seconds": elapsed,
         "seconds_per_epoch": elapsed / max(len(history), 1),

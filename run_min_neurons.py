@@ -42,6 +42,17 @@ SEARCH_CONFIG = "configs/min_neurons.yaml"
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Рекурсивно объединяет два словаря, не изменяя исходные.
+
+    Нужен, чтобы из базового configs/relu.yaml получить конфиг конкретного
+    прогона: меняются только hidden_neurons, seed и output.dir, а все
+    остальные параметры (lr, batch_size, epochs, dropout...) наследуются.
+
+    Если значение по ключу — словарь в обоих словарях, оно сливается
+    рекурсивно (например, model.hidden_neurons не затирает model.activation);
+    иначе значение из ``override`` полностью заменяет базовое.
+    ``deepcopy`` защищает исходный конфиг от случайных изменений.
+    """
     result = copy.deepcopy(base)
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(result.get(key), dict):
@@ -56,7 +67,20 @@ def find_min_hidden_neurons(
     search: dict[str, Any],
     root: Path,
 ) -> tuple[int | None, list[dict[str, Any]]]:
-    """Идёт от start_neurons вверх и возвращает первую прошедшую ширину."""
+    """Идёт от start_neurons вверх и возвращает первую прошедшую ширину.
+
+    Для каждой ширины (start, start+step, ...) обучаются все seed'ы из
+    ``search["seeds"]``. Условие остановки зависит от ``criterion``:
+      * "all" — test accuracy КАЖДОГО seed'а >= target (используется в E5,
+        это более строгий и устойчивый критерий);
+      * иначе — средняя test accuracy по seed'ам >= target.
+
+    Каждый прогон — отдельный подкаталог внутри ``root/runs``; в records
+    накапливаются ширина, seed, val/test accuracy, число параметров, время
+    и путь к прогону. Возвращает (найденная ширина | None, все записи).
+
+    None означает, что порог не достигнут даже на max_neurons.
+    """
     start = int(search["start_neurons"])
     step = int(search["step"])
     max_neurons = int(search["max_neurons"])
@@ -70,6 +94,7 @@ def find_min_hidden_neurons(
     for width in range(start, max_neurons + 1, step):
         width_records: list[dict[str, Any]] = []
         for seed in seeds:
+            # Меняем только ширину, seed и каталог; всё остальное — из base.
             config = deep_merge(
                 base_config,
                 {
@@ -83,12 +108,16 @@ def find_min_hidden_neurons(
                     "output": {"dir": str(root / "runs")},
                 },
             )
+            # verbose=False: при 5 seed'ах на каждую ширину вывод был бы шумным,
+            # поэтому печатается только сводка по ширине ниже.
             run_dir = train(
                 config,
                 name=f"n{width:03d}_s{seed}",
                 verbose=False,
             )
             summary = load_json(run_dir / "summary.json")
+            # Для условия остановки используется test accuracy (по заданию);
+            # val accuracy сохраняется для сравнения и отчёта.
             test_acc = accuracy_on_split(run_dir / "best.pt", "test")
             record = {
                 "neurons": width,
@@ -116,6 +145,8 @@ def find_min_hidden_neurons(
             f"параметров {width_records[0]['params']:,}"
         )
 
+        # Критерий "all" требует, чтобы порог взял каждый seed, а не только
+        # среднее: иначе один неудачный seed маскировался бы хорошими.
         passed = (
             all(value >= target for value in test_values)
             if criterion == "all"
@@ -135,6 +166,19 @@ def write_results(
     records: list[dict[str, Any]],
     results: dict[str, dict[str, Any]],
 ) -> None:
+    """Сохраняет search.csv и search.md по итогам поиска ширины.
+
+    Артефакты:
+        search.csv — все прогоны (ширина, seed, val/test accuracy, параметры,
+            время, путь);
+        search.md — читаемый отчёт: таблица по ширинам (среднее и минимум
+            test accuracy), результаты seed'ов победившей ширины, итоговые
+            метрики train/val/test и объяснение, почему меньшие ширины
+            не подошли.
+
+    ``results`` — метрики финальной модели-победителя (из evaluate_split),
+    они нужны для раздела «Итоговые метрики».
+    """
     seeds = [int(seed) for seed in search["seeds"]]
     target = float(search["target_accuracy"])
 
@@ -156,6 +200,7 @@ def write_results(
         for record in records:
             writer.writerow(record)
 
+    # Уникальные ширины в порядке возрастания — строки основной таблицы.
     widths = sorted({record["neurons"] for record in records})
     lines = [
         "# Минимальное число нейронов скрытого слоя",
@@ -208,6 +253,8 @@ def write_results(
             f"{results[split]['macro_f1'] * 100:.2f} % |"
         )
 
+    # Все ширины меньше победившей: по ним видно, насколько близко они были
+    # к порогу и почему критерий "all" их не пропустил.
     smaller = [
         record
         for record in records
@@ -245,6 +292,13 @@ def write_results(
 
 
 def plot_curve(root: Path, records: list[dict[str, Any]], winner: int) -> None:
+    """Рисует зависимость test accuracy от ширины скрытого слоя.
+
+    Для каждой ширины — среднее по seed'ам и стандартное отклонение
+    (errorbar). Горизонтальная пунктирная линия — целевые 97 %.
+    Победившая ширина обведена кружком, чтобы её было видно на графике.
+    Результат сохраняется в ``accuracy_vs_neurons.png``.
+    """
     widths = sorted({record["neurons"] for record in records})
     means = []
     errors = []
@@ -287,8 +341,22 @@ def plot_curve(root: Path, records: list[dict[str, Any]], winner: int) -> None:
 
 
 def main() -> None:
+    """Точка входа: запускает поиск ширины и оформляет результаты.
+
+    Шаги:
+      1. Читает базовый конфиг (configs/relu.yaml) и параметры поиска
+         (configs/min_neurons.yaml), накладывает base_overrides.
+      2. Создаёт каталог runs/min_neurons_<timestamp>/.
+      3. Ищет минимальную ширину через find_min_hidden_neurons.
+      4. Если порог не достигнут — сохраняет сырые записи и выходит.
+      5. Иначе выбирает «типичный» прогон победившей ширины (ближайший к
+         медиане test accuracy), считает для него полный отчёт и сохраняет
+         search.md, search.csv, график и search_data.json.
+    """
     base_config = load_config(BASE_CONFIG)
     search = load_config(SEARCH_CONFIG)
+    # base_overrides позволяет менять общие параметры обучения, не трогая
+    # основной configs/relu.yaml.
     base_config = deep_merge(base_config, search.get("base_overrides", {}))
 
     root = project_path("runs") / f"min_neurons_{timestamp()}"
@@ -307,6 +375,8 @@ def main() -> None:
 
     print(f"\nМинимальная ширина: {winner} нейронов")
 
+    # Для полного отчёта берётся не случайный, а медианный по test accuracy
+    # прогон: так отчёт не завышает и не занижает результат.
     winner_records = [record for record in records if record["neurons"] == winner]
     median_test = statistics.median(
         record["test_acc"] for record in winner_records

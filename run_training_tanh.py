@@ -17,6 +17,11 @@ RUN_NAME = "tanh"
 
 
 def main() -> None:
+    """Запускает тот же пайплайн, что run_training.py, но с конфигом tanh.
+
+    Вся логика переиспользуется из run_training.run; различаются только
+    путь к конфигу и имя каталога запуска.
+    """
     run(CONFIG_PATH, RUN_NAME)
 
 

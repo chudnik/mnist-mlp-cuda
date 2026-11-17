@@ -40,6 +40,14 @@ COLORS = {
 
 
 def _latest(pattern: str, filename: str) -> Path:
+    """Возвращает самый свежий файл runs/<pattern>_*/<filename>.
+
+    Сводка всегда строится по последним прогонам каждого типа
+    (relu, tanh, stage2, min_neurons), поэтому не нужно вручную указывать
+    timestamp. Сортировка идёт по mtime, а не по имени, — так надёжнее,
+    если каталоги копировали. Если файлов нет, выбрасывается понятная ошибка:
+    значит, соответствующий эксперимент ещё не выполнен.
+    """
     paths = sorted(
         project_path("runs").glob(f"{pattern}_*/{filename}"),
         key=lambda path: path.stat().st_mtime,
@@ -50,6 +58,12 @@ def _latest(pattern: str, filename: str) -> Path:
 
 
 def _load_metrics(run_dir: Path) -> list[dict[str, float]]:
+    """Читает metrics.csv прогона и приводит числа к float/int.
+
+    Возвращает список словарей по эпохам. Нужны только эти колонки:
+    epoch, train_loss, train_acc, val_loss, val_acc, seconds. Остальные
+    (lr, gpu_mem_mb, tanh_saturated) для сводки не используются.
+    """
     with (run_dir / "metrics.csv").open(encoding="utf-8") as fh:
         return [
             {
@@ -67,6 +81,12 @@ def _load_metrics(run_dir: Path) -> list[dict[str, float]]:
 def _first_epoch(
     rows: list[dict[str, float]], key: str, threshold: float
 ) -> int | None:
+    """Возвращает номер первой эпохи, где rows[i][key] >= threshold.
+
+    Используется для сходимости: «на какой эпохе val accuracy впервые
+    достигла 95 % / 98 %». None означает, что порог не достигнут за всё
+    обучение.
+    """
     for row in rows:
         if row[key] >= threshold:
             return row["epoch"]
@@ -79,6 +99,14 @@ def _train_accuracy(run_dir: Path) -> float:
 
 
 def _report_records(experiment: str, pattern: str) -> list[dict[str, Any]]:
+    """Собирает запись одного прогона E1 или E4 из report_data.json.
+
+    ``pattern`` — префикс каталога (relu или tanh); берётся последний
+    прогон. Из report_data.json читаются конфиг, summary и метрики test.
+    Train accuracy досчитывается по best.pt в eval-режиме: в metrics.csv
+    она измерена во время обучения (с включённым Dropout) и занижена,
+    поэтому для честного разрыва train–test нужен отдельный прогон.
+    """
     run_dir = _latest(pattern, "report_data.json").parent
     payload = load_json(run_dir / "report_data.json")
     config = payload["config"]
@@ -105,6 +133,12 @@ def _report_records(experiment: str, pattern: str) -> list[dict[str, Any]]:
 
 
 def _stage2_records() -> list[dict[str, Any]]:
+    """Собирает записи E2/E3 из последнего stage2_data.json.
+
+    В файле уже есть метрики каждого прогона; недостающие best_epoch и
+    train accuracy дочитываются из summary.json и best.pt соответствующего
+    прогона. Ширина фиксирована (46), поэтому neurons = 46.
+    """
     path = _latest("stage2", "stage2_data.json")
     payload = load_json(path)
     records: list[dict[str, Any]] = []
@@ -133,6 +167,13 @@ def _stage2_records() -> list[dict[str, Any]]:
 
 
 def _e5_records() -> list[dict[str, Any]]:
+    """Собирает записи E5 — все seed'ы победившей ширины.
+
+    Из search_data.json берётся winner_neurons; записи других ширин
+    отбрасываются. Macro F1 в поиске считался только для финальной модели
+    (final_run), поэтому для остальных seed'ов f1 = None — в таблицах это
+    отображается как «—», а среднее F1 считается только по финальному.
+    """
     path = _latest("min_neurons", "search_data.json")
     payload = load_json(path)
     winner = int(payload["winner_neurons"])
@@ -166,6 +207,18 @@ def _e5_records() -> list[dict[str, Any]]:
 
 
 def aggregate(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Считает агрегаты по каждому эксперименту E1–E5.
+
+    Для каждого эксперимента усредняются test/val/train accuracy и Macro F1
+    по всем его прогонам (у E1/E4 один прогон — std = 0). Дополнительно
+    считается:
+      * ``gap`` — средний train accuracy минус средний test accuracy
+        (оценка переобучения в процентных пунктах);
+      * средние эпохи и время, число параметров (оно одинаково у всех,
+        так как ширина фиксирована).
+
+    E5 по построению имеет 5 записей, E2/E3 — по 3, E1/E4 — по 1.
+    """
     stats: dict[str, dict[str, Any]] = {}
     for experiment in EXPERIMENT_ORDER:
         rows = [row for row in records if row["experiment"] == experiment]
@@ -202,6 +255,18 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def convergence(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Считает, как быстро эксперименты выходят на val 95 % и 98 %.
+
+    Для каждого прогона по metrics.csv находится первая эпоха, где
+    val accuracy >= 0.95 и >= 0.98. Затем:
+      * epoch_95/epoch_98 — средняя эпоха по тем прогонам, где порог
+        достигнут (None, если не достигнут никем);
+      * reached_95/reached_98 — сколько прогонов из n порог взяли;
+      * seconds_per_epoch — среднее время эпохи (по всем прогонам).
+
+    Такая разбивка честнее, чем «средняя эпоха по всем»: если tanh вообще
+    не доходит до 95 %, это видно по reached_95 = 0, а не маскируется нулём.
+    """
     result: dict[str, dict[str, Any]] = {}
     for experiment in EXPERIMENT_ORDER:
         rows = [row for row in records if row["experiment"] == experiment]
@@ -231,12 +296,14 @@ def convergence(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def _fmt_acc(mean: float, std: float, n: int) -> str:
+    """Форматирует accuracy как «mean ± std %» или «mean %» для одного прогона."""
     if n > 1:
         return f"{mean * 100:.2f} ± {std * 100:.2f} %"
     return f"{mean * 100:.2f} %"
 
 
 def _fmt_epoch(value: float | None) -> str:
+    """Форматирует среднюю эпоху; None (порог не достигнут) -> прочерк."""
     if value is None:
         return "—"
     return f"{value:.1f}"
@@ -248,6 +315,19 @@ def write_tables(
     records: list[dict[str, Any]],
     conv: dict[str, dict[str, Any]],
 ) -> None:
+    """Сохраняет summary.csv, runs.csv, convergence.csv и summary.md.
+
+    Содержимое:
+        summary.csv     — агрегаты по экспериментам E1–E5;
+        runs.csv        — все прогоны с метриками и путями;
+        convergence.csv — эпохи достижения val 95/98 %;
+        summary.md      — те же данные в виде Markdown-таблиц плюс
+                          пояснения: какие выборки использовались, почему
+                          у E1/E4 нет std, почему у E5 один Macro F1.
+
+    В CSV числа пишутся с 6 знаками после запятой, чтобы их можно было
+    использовать в отчёте без потери точности.
+    """
     summary_fields = [
         "experiment",
         "train_size",
@@ -470,6 +550,15 @@ def write_tables(
 
 
 def plot_learning_curves(root: Path, records: list[dict[str, Any]]) -> None:
+    """Рисует learning curves E1–E4 (по одному представителю — seed 42).
+
+    Два графика: loss и accuracy. Сплошные линии — validation, пунктирные —
+    train. На правом графике отмечены пороги 95 % и 98 %. По расхождению
+    train и val видно переобучение: у 20k оно заметно сильнее, чем у 54k.
+
+    E5 не включается, потому что это серия из 5 прогонов одной ширины —
+    её кривые уже представлены E1 (та же конфигурация при seed 42).
+    """
     representatives: dict[str, dict[str, Any]] = {}
     for experiment in ("E1", "E2", "E3", "E4"):
         candidates = [
@@ -524,6 +613,12 @@ def plot_learning_curves(root: Path, records: list[dict[str, Any]]) -> None:
 
 
 def plot_summary(root: Path, stats: dict[str, dict[str, Any]]) -> None:
+    """Рисует итоговый график E1–E5: test accuracy и val accuracy.
+
+    Столбцы — средняя test accuracy, усы — std по seed'ам, чёрные крестики —
+    средняя val accuracy. Пунктир — целевой порог 97 %. Подписи по оси X
+    показывают размер train и активацию. Результат — summary_accuracy.png.
+    """
     experiments = [name for name in EXPERIMENT_ORDER if name in stats]
     means = [stats[name]["test_mean"] * 100 for name in experiments]
     errors = [stats[name]["test_std"] * 100 for name in experiments]
