@@ -184,15 +184,32 @@ def build_datasets(
     )
 
     seed = int(config.get("seed", 42))
+    subset_size = data_cfg.get("train_subset")
+    train_pool = split.train
+    if subset_size is not None:
+        if int(subset_size) >= split.train.size:
+            raise ValueError(
+                f"train_subset={subset_size} должен быть меньше train-пула "
+                f"({split.train.size})"
+            )
+        train_pool = _subset_indices(split.train, int(subset_size), seed + 1)
     train_indices = _subset_indices(
-        split.train, data_cfg.get("limit_train"), seed + 1
+        train_pool, data_cfg.get("limit_train"), seed + 1
     )
     val_indices = _subset_indices(split.val, data_cfg.get("limit_val"), seed + 2)
+
+    if np.intersect1d(train_indices, split.val).size:
+        raise RuntimeError("Пересечение обучающего подмножества и val — утечка данных")
+    if np.unique(train_indices).size != train_indices.size:
+        raise RuntimeError("Дубликаты в обучающем подмножестве")
 
     train_ds = IndexedDataset(base_train, train_indices)
     val_ds = IndexedDataset(base_train, val_indices)
     test_ds = IndexedDataset(base_test, np.arange(len(base_test), dtype=np.int64))
 
+    subset_hash = hashlib.sha1(
+        train_indices.astype(np.int64).tobytes()
+    ).hexdigest()
     meta = {
         "split_file": str(split_path),
         "fingerprint": split.fingerprint,
@@ -203,6 +220,9 @@ def build_datasets(
         "split_seed": int(data_cfg["split_seed"]),
         "train_full_size": int(split.train.size),
         "val_full_size": int(split.val.size),
+        "train_subset": None if subset_size is None else int(subset_size),
+        "train_subset_seed": seed + 1 if subset_size is not None else None,
+        "train_subset_hash": subset_hash,
     }
     return train_ds, val_ds, test_ds, meta
 

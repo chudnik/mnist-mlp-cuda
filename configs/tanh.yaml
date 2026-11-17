@@ -11,6 +11,7 @@ data:
   num_workers: 4
   limit_train: null
   limit_val: null
+  train_subset: null
 
 model:
   hidden_neurons: 46

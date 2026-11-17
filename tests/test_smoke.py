@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from mnist_mlp.analysis import compute_metrics
-from mnist_mlp.data import Split, stratified_split
+from mnist_mlp.data import Split, _subset_indices, stratified_split
 from mnist_mlp.model import MLP, build_model
 
 
@@ -60,6 +60,17 @@ def test_mlp_flattens_input() -> None:
     model.eval()
     flat = torch.flatten(torch.ones(2, 1, 28, 28), start_dim=1)
     assert torch.allclose(model(flat), model(torch.ones(2, 1, 28, 28)))
+
+
+def test_subset_indices_is_reproducible_and_unique() -> None:
+    indices = np.arange(1000)
+    first = _subset_indices(indices, 200, seed=42)
+    second = _subset_indices(indices, 200, seed=42)
+
+    assert first.size == 200
+    assert np.array_equal(first, second)
+    assert np.unique(first).size == first.size
+    assert not np.array_equal(first, _subset_indices(indices, 200, seed=43))
 
 
 def test_compute_metrics_perfect_predictions() -> None:

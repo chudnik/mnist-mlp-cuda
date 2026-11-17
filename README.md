@@ -20,7 +20,7 @@ train/val/test и собирает готовые данные для отчёт
   per-class метрики и список уверенных ошибок.
 
 Поиск минимальной ширины скрытого слоя при одном скрытом слое —
-`run_min_neurons.py`, см. ниже. Эксперименты этапа 2 (20k + tanh) — в `PLAN.md`.
+`run_min_neurons.py`, этап 2 (20 000 объектов) — `run_stage2.py`, см. ниже.
 
 ## Результаты моделей (46 нейронов)
 
@@ -136,12 +136,44 @@ training:
 сопоставима с разбросом по seed'ам, поэтому 46 — минимум для данного критерия
 и фиксированных seed'ов, а не гарантированная теоретическая граница.
 
+## Этап 2: обучение на 20 000 объектов
+
+```bash
+.venv/bin/python run_stage2.py
+```
+
+Скрипт читает `configs/stage2_tanh.yaml` (E2) и `configs/stage2_relu.yaml`
+(E3). Оба конфига используют `data.train_subset: 20000`: из train-пула 54 000
+случайно без замены отбираются 20 000 объектов. Подмножество зависит от seed
+прогона, поэтому 3 seed'а (42–44) дают 3 разных набора. Val 6 000 и test
+10 000 — те же, что на этапе 1.
+
+| Эксперимент | Активация | Train | Test acc (mean ± std) | Test min | Val acc |
+|---|---|---|---|---|---|
+| E2 | tanh | 20 000 | 94.24 ± 0.22 % | 93.98 % | 93.73 % |
+| E3 | relu | 20 000 | 95.58 ± 0.16 % | 95.40 % | 95.24 % |
+
+Сравнение с этапом 1 при той же ширине 46:
+
+| Условие | Train | Активация | Test acc |
+|---|---|---|---|
+| E1 | 54 000 | relu | 97.08 % |
+| E4 | 54 000 | tanh | 96.21 % |
+| E3 | 20 000 | relu | 95.58 ± 0.16 % |
+| E2 | 20 000 | tanh | 94.24 ± 0.22 % |
+
+При 46 нейронах сокращение выборки до 20k стоит ≈1.5 п.п. для ReLU и ≈2.0 п.п.
+для tanh; tanh проигрывает ReLU 1.34 п.п. Обе модели на 20k ниже порога 97 % —
+ширина 46 подбиралась как минимум для 54k, а не для 20k.
+
+Артефакты: `runs/stage2_20261117-182941/`.
+
 ## Конфиг
 
 `configs/relu.yaml` и `configs/tanh.yaml` (отличаются только `model.activation`):
 
 - данные: `root`, `val_ratio`, `split_seed`, `batch_size`, `num_workers`,
-  `limit_train`, `limit_val`;
+  `limit_train`, `limit_val`, `train_subset` (null или 20 000);
 - модель: `hidden_neurons` (число нейронов единственного скрытого слоя),
   `activation` (`relu`/`tanh`/`gelu`), `dropout`, `batchnorm`;
 - обучение: `epochs`, `lr`, `weight_decay`, `patience`, `min_delta`, `amp`,
@@ -172,9 +204,12 @@ runs/base_<timestamp>/
 ```
 run_training.py          обучение ReLU-модели + report.md
 run_training_tanh.py     обучение tanh-модели + report.md
+run_stage2.py            этап 2: 20k, tanh/ReLU, 3 seed'а
 run_min_neurons.py       поиск минимальной ширины скрытого слоя, 5 seed'ов
 configs/relu.yaml        гиперпараметры ReLU-модели
 configs/tanh.yaml        гиперпараметры tanh-модели
+configs/stage2_tanh.yaml этап 2: 20k + tanh
+configs/stage2_relu.yaml этап 2: 20k + ReLU
 configs/min_neurons.yaml параметры поиска минимальной ширины
 mnist_mlp/data.py        MNIST, стратифицированное разбиение, DataLoader
 mnist_mlp/model.py       MLP, инициализация, сборка по конфигу
