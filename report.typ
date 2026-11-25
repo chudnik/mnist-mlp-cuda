@@ -1,3 +1,56 @@
+// Оформление основной части лабораторного отчёта по ГОСТ 7.32–2017.
+// Реферат, содержание, список источников и блоки подписей не включаются.
+#set document(
+  title: "Отчёт по лабораторной работе. Распознавание рукописных цифр MNIST",
+)
+#set page(
+  paper: "a4",
+  margin: (left: 30mm, right: 15mm, top: 20mm, bottom: 20mm),
+  numbering: "1",
+  number-align: center + bottom,
+)
+#set text(font: "Times New Roman", size: 14pt, lang: "ru", fill: black)
+#set par(
+  justify: true,
+  first-line-indent: (amount: 1.25cm, all: true),
+  leading: 0.5em,
+  spacing: 0pt,
+)
+
+// Нумерация без точки в конце; каждый раздел начинается с новой страницы.
+#set heading(numbering: "1.1", outlined: false)
+#show heading: it => {
+  set text(size: 14pt, weight: "bold", hyphenate: false)
+  set par(justify: false, first-line-indent: 0pt)
+  block(above: 1.5em, below: 1.5em)[
+    #h(1.25cm)#it
+  ]
+}
+#show heading.where(level: 1): it => {
+  pagebreak(weak: true)
+  it
+}
+
+#set list(marker: [–], indent: 1.25cm, body-indent: 0.5em, spacing: 0pt)
+#set enum(indent: 1.25cm, body-indent: 0.5em, spacing: 0pt)
+#show list: set par(first-line-indent: 0pt)
+#show enum: set par(first-line-indent: 0pt)
+
+// Листинги и таблицы набираются компактнее основного текста.
+#set raw(theme: none)
+#show raw: set text(font: "Courier New", size: 12pt)
+#show raw.where(block: true): it => {
+  set par(justify: false, first-line-indent: 0pt, leading: 0pt)
+  block(width: 100%, above: 0.75em, below: 0.75em, it)
+}
+#show table: it => {
+  set text(size: 12pt)
+  set par(justify: false, first-line-indent: 0pt, leading: 0pt)
+  block(above: 0.75em, below: 0.75em, it)
+}
+#set table(stroke: 0.5pt, inset: 5pt, align: center + horizon)
+#set figure(gap: 0pt)
+
 = Постановка задачи
 
 Требуется разработать программное приложение для распознавания рукописных цифр из набора данных MNIST с использованием многослойной нейронной сети.
@@ -68,13 +121,13 @@ CUDA-настройка вынесена в отдельный файл `cuda_se
 
 Формально подготовка данных выполняется следующим образом:
 
-1. Загрузить изображения $X$ и метки $Y$ из MNIST.
-2. Нормировать изображения: $X := X / 255$.
-3. Сгенерировать случайную перестановку индексов исходного обучающего набора.
-4. Первые 54 000 индексов выделить для обучения.
-5. Оставшиеся 6 000 индексов выделить для валидации.
-6. Тестовую выборку оставить без изменений.
-7. Для второго эксперимента выбрать без возвращения 20 000 индексов из обучающей выборки.
++ Загрузить изображения $X$ и метки $Y$ из MNIST.
++ Нормировать изображения: $X := X / 255$.
++ Сгенерировать случайную перестановку индексов исходного обучающего набора.
++ Первые 54 000 индексов выделить для обучения.
++ Оставшиеся 6 000 индексов выделить для валидации.
++ Тестовую выборку оставить без изменений.
++ Для второго эксперимента выбрать без возвращения 20 000 индексов из обучающей выборки.
 
 Основной фрагмент программы:
 
@@ -108,11 +161,11 @@ subset = (
 
 Для заданного числа нейронов $H$ создаётся модель:
 
-1. вход изображения размером 28×28;
-2. преобразование изображения в вектор;
-3. Dense-слой размера $H$ с выбранной функцией активации;
-4. Dropout с вероятностью 0,2;
-5. Dense-слой размера 10 с softmax.
++ вход изображения размером 28×28;
++ преобразование изображения в вектор;
++ Dense-слой размера $H$ с выбранной функцией активации;
++ Dropout с вероятностью 0,2;
++ Dense-слой размера 10 с softmax.
 
 Фрагмент программного кода:
 
@@ -224,12 +277,18 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 Ширина 48 прошла условие: минимальная validation accuracy по пяти seed составила 97,02 %, средняя accuracy составила около 97,09 %. Поэтому в данной серии экспериментов выбрана архитектура с 48 нейронами скрытого слоя.
 
-| Количество нейронов | Минимальная validation accuracy | Решение |
-|---:|---:|---|
-| 45 | 96,70 % | не подходит |
-| 46 | 96,85 % | не подходит |
-| 47 | 96,93 % | не подходит |
-| 48 | 97,02 % | подходит |
+#table(
+  columns: (1fr, 1.5fr, 1fr),
+  table.header(
+    [*Количество нейронов*],
+    [*Минимальная validation accuracy*],
+    [*Решение*],
+  ),
+  [45], [96,70 %], [не подходит],
+  [46], [96,85 %], [не подходит],
+  [47], [96,93 %], [не подходит],
+  [48], [97,02 %], [подходит],
+)
 
 В результате архитектура базовой сети имеет вид:
 
@@ -243,10 +302,29 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 Базовая модель обучалась на 54 000 изображениях с функцией активации ReLU. Для второго эксперимента из обучающего набора случайно выбраны 20 000 изображений, а в скрытом слое использована функция tanh.
 
-| Эксперимент | Обучающих объектов | Активация | Нейронов | Train accuracy | Validation accuracy | Test accuracy |
-|---|---:|---|---:|---:|---:|---:|
-| Базовый | 54 000 | ReLU | 48 | 98,79 % | 97,13 % | 97,21 % |
-| Сокращённый | 20 000 | tanh | 48 | 97,36 % | 94,87 % | 94,89 % |
+Параметры сравниваемых экспериментов:
+
+#table(
+  columns: (1.4fr, 1fr, 1fr, 1fr),
+  table.header(
+    [*Эксперимент*], [*Обучающих объектов*],
+    [*Активация*], [*Нейронов*],
+  ),
+  [Базовый], [54 000], [ReLU], [48],
+  [Сокращённый], [20 000], [tanh], [48],
+)
+
+Точность классификации на обучающей, валидационной и тестовой выборках:
+
+#table(
+  columns: (1.4fr, 1fr, 1fr, 1fr),
+  table.header(
+    [*Эксперимент*], [*Train accuracy*],
+    [*Validation accuracy*], [*Test accuracy*],
+  ),
+  [Базовый], [98,79 %], [97,13 %], [97,21 %],
+  [Сокращённый], [97,36 %], [94,87 %], [94,89 %],
+)
 
 Таким образом, сокращение обучающей выборки и замена ReLU на tanh привели к снижению тестовой accuracy примерно на 2,32 процентного пункта по сравнению с базовым экспериментом.
 
@@ -257,54 +335,50 @@ uv pip install --python .venv/bin/python -r requirements.txt
 График обучения базовой модели с ReLU:
 
 #figure(
-  image("results/full_relu/learning_curves.png", width: 100%),
-  caption: [Кривые обучения базовой модели на полном наборе данных.]
+  image("results/full_relu/learning_curves.png", width: 100%)
 )
 
-[Открыть график базовой модели](results/full_relu/learning_curves.png)
+#link("results/full_relu/learning_curves.png")[Открыть график базовой модели]
 
 График обучения модели tanh на 20 000 изображениях:
 
 #figure(
-  image("results/subset_20k_tanh/learning_curves.png", width: 100%),
-  caption: [Кривые обучения модели с tanh на сокращённом наборе.]
+  image("results/subset_20k_tanh/learning_curves.png", width: 100%)
 )
 
-[Открыть график модели tanh](results/subset_20k_tanh/learning_curves.png)
+#link("results/subset_20k_tanh/learning_curves.png")[Открыть график модели tanh]
 
 График одного из запусков поиска для 48 нейронов:
 
 #figure(
-  image("results/search_48_seed_42/learning_curves.png", width: 100%),
-  caption: [Кривые обучения модели с 48 нейронами, seed 42.]
+  image("results/search_48_seed_42/learning_curves.png", width: 100%)
 )
 
-[Открыть график поиска 48 нейронов](results/search_48_seed_42/learning_curves.png)
+#link("results/search_48_seed_42/learning_curves.png")[Открыть график поиска 48 нейронов]
 
 График запуска для 47 нейронов, который не прошёл критерий по минимальному результату пяти seed:
 
 #figure(
-  image("results/search_47_seed_46/learning_curves.png", width: 100%),
-  caption: [Кривые обучения модели с 47 нейронами, seed 46.]
+  image("results/search_47_seed_46/learning_curves.png", width: 100%)
 )
 
-[Открыть график запуска 47 нейронов](results/search_47_seed_46/learning_curves.png)
+#link("results/search_47_seed_46/learning_curves.png")[Открыть график запуска 47 нейронов]
 
 Полный табличный протокол всех экспериментов:
 
-[Открыть summary.csv](results/summary.csv)
+#link("results/summary.csv")[Открыть summary.csv]
 
 Сводные результаты в формате JSON:
 
-[Открыть summary.json](results/summary.json)
+#link("results/summary.json")[Открыть summary.json]
 
 Метрики базового эксперимента:
 
-[Открыть metrics.json базовой модели](results/full_relu/metrics.json)
+#link("results/full_relu/metrics.json")[Открыть metrics.json базовой модели]
 
 Метрики сокращённого эксперимента:
 
-[Открыть metrics.json модели tanh](results/subset_20k_tanh/metrics.json)
+#link("results/subset_20k_tanh/metrics.json")[Открыть metrics.json модели tanh]
 
 = Выводы по лабораторной работе
 
