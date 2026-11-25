@@ -1,5 +1,3 @@
-// Оформление основной части лабораторного отчёта по ГОСТ 7.32–2017.
-// Реферат, содержание, список источников и блоки подписей не включаются.
 #set document(
   title: "Отчёт по лабораторной работе. Распознавание рукописных цифр MNIST",
 )
@@ -9,16 +7,14 @@
   numbering: "1",
   number-align: center + bottom,
 )
-#set text(font: "Times New Roman", size: 14pt, lang: "ru", fill: black)
+#set text(size: 14pt, lang: "ru", fill: black)
 #set par(
   justify: true,
   first-line-indent: (amount: 1.25cm, all: true),
   leading: 0.5em,
-  spacing: 0pt,
+  spacing: 0.7em,
 )
-
-// Нумерация без точки в конце; каждый раздел начинается с новой страницы.
-#set heading(numbering: "1.1", outlined: false)
+#set heading(numbering: "1.1", outlined: true)
 #show heading: it => {
   set text(size: 14pt, weight: "bold", hyphenate: false)
   set par(justify: false, first-line-indent: 0pt)
@@ -26,21 +22,15 @@
     #h(1.25cm)#it
   ]
 }
-#show heading.where(level: 1): it => {
-  pagebreak(weak: true)
-  it
-}
-
-#set list(marker: [–], indent: 1.25cm, body-indent: 0.5em, spacing: 0pt)
-#set enum(indent: 1.25cm, body-indent: 0.5em, spacing: 0pt)
+#show heading.where(level: 1): it => it
+#set list(marker: [–], indent: 1.25cm, body-indent: 0.5em, spacing: 0.35em)
+#set enum(indent: 1.25cm, body-indent: 0.5em, spacing: 0.35em)
 #show list: set par(first-line-indent: 0pt)
 #show enum: set par(first-line-indent: 0pt)
-
-// Листинги и таблицы набираются компактнее основного текста.
 #set raw(theme: none)
-#show raw: set text(font: "Courier New", size: 12pt)
+#show raw: set text(font: "DejaVu Sans Mono", size: 12pt)
 #show raw.where(block: true): it => {
-  set par(justify: false, first-line-indent: 0pt, leading: 0pt)
+  set par(justify: false, first-line-indent: 0pt, leading: 0.2em, spacing: 0.2em)
   block(width: 100%, above: 0.75em, below: 0.75em, it)
 }
 #show table: it => {
@@ -51,25 +41,50 @@
 #set table(stroke: 0.5pt, inset: 5pt, align: center + horizon)
 #set figure(gap: 0pt)
 
+#page(numbering: none)[
+  #set par(justify: false, first-line-indent: 0pt, leading: 1em)
+  #align(center)[
+    МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ \
+    Федеральное государственное бюджетное образовательное учреждение высшего образования \
+    «Национальный исследовательский ядерный университет «МИФИ» (НИЯУ МИФИ)\
+    #v(0.5em)
+    ИНСТИТУТ ИНТЕЛЛЕКТУАЛЬНЫХ КИБЕРНЕТИЧЕСКИХ СИСТЕМ \
+    КАФЕДРА «КОМПЬЮТЕРНЫЕ СИСТЕМЫ И ТЕХНОЛОГИИ» (№12)
+  ]
+  #v(1fr)
+  #align(center)[
+    #text(weight: "bold", size: 16pt)[ОТЧЁТ О ЛАБОРАТОРНОЙ РАБОТЕ № 2] \
+    #v(0.5em)
+    по дисциплине: «Теория и методы распознования образов» \
+    #v(1em)
+    Тема: «ПРИМЕНЕНИЕ НЕЙРОННЫХ СЕТЕЙ ДЛЯ РАСПОЗНАВАНИЯ РУКОПИСНЫХ СИМВОЛОВ»
+  ]
+  #v(1fr)
+  #align(right)[
+    #block(width: 8.5cm)[
+      #set align(left)
+      Выполнил: \
+      студент группы С23-501 \
+      Н. Н. Чудаев  \
+      #v(1.2em)
+      Проверил:\
+      М. В. Зенькович
+    ]
+  ]
+  #v(1fr)
+  #align(center)[Москва — 2026]
+]
+
+#pagebreak()
+#v(1em)
+#outline(indent: 1.25cm, depth: 2)
+#pagebreak()
+
 = Постановка задачи
 
-Требуется разработать программное приложение для распознавания рукописных цифр из набора данных MNIST с использованием многослойной нейронной сети.
-
-В лабораторной работе решаются следующие задачи:
-
-- загрузить и подготовить набор данных MNIST;
-- разделить исходный обучающий набор на обучающую и валидационную выборки;
-- построить многослойный перцептрон для классификации цифр от 0 до 9;
-- подобрать минимальное количество нейронов в скрытом слое, при котором точность классификации тестовой выборки составляет не менее 97 %;
-- выполнить поиск минимальной ширины сети на пяти значениях seed: 42, 43, 44, 45 и 46;
-- повторить обучение на случайной выборке из 20 000 изображений с функцией активации гиперболического тангенса;
-- сравнить результат сокращённого эксперимента с базовым обучением на полном обучающем наборе.
-
-В качестве критерия качества используется accuracy — доля правильно классифицированных изображений:
-
-$ "accuracy" = (1 / N) sum_(i=1)^N [y_i = hat(y)_i], $
-
-где $N$ — количество объектов, $y_i$ — правильный класс, а $hat(y)_i$ — результат классификации модели.
+1. Разработать программное приложение для распознавания рукописных символов (цифр), с применением многослойных нейронных сетей.
+2. Для набора данных изображений рукописных цифр MNIST создать архитектуру нейронной сети с наименьшим числом нейронов, достаточных для правильной классификации изображений тестового набора данных на уровне не менее 97%. Обучить нейронную сеть с контролем эффекта переобучения путем использования набора данных валидации.
+3. Сократить обучающий набор до размера 20 000 элементов, отобранных случайным образом из исходного обучающего набора данных. Обучить нейронную сеть с новым набором данных новой функцией активации нейронов скрытых слоев: гиперболический тангенс, и сравнить качество обучения с предыдущим случаем (когда использовалась весь обучающий набор данных).
 
 = Описание и обоснование выбора методов, моделей и программных инструментов
 
@@ -89,7 +104,7 @@ $ "accuracy" = (1 / N) sum_(i=1)^N [y_i = hat(y)_i], $
 
 Используется многослойный перцептрон с одним скрытым слоем:
 
-$ 784 -> H -> 10,$
+$784 -> H -> 10,$
 
 где 784 — количество пикселей изображения, $H$ — количество нейронов скрытого слоя, а 10 — количество классов цифр.
 
@@ -247,7 +262,7 @@ while left <= right:
         left = neurons + 1
 ```
 
-= Демонстрация работы программы и протоколы тестирования
+= Демонстрация работы программы
 
 == Запуск программы
 
@@ -279,11 +294,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 #table(
   columns: (1fr, 1.5fr, 1fr),
-  table.header(
-    [*Количество нейронов*],
-    [*Минимальная validation accuracy*],
-    [*Решение*],
-  ),
+  table.header([*Количество нейронов*], [*Минимальная validation accuracy*], [*Решение*]),
   [45], [96,70 %], [не подходит],
   [46], [96,85 %], [не подходит],
   [47], [96,93 %], [не подходит],
@@ -306,10 +317,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 #table(
   columns: (1.4fr, 1fr, 1fr, 1fr),
-  table.header(
-    [*Эксперимент*], [*Обучающих объектов*],
-    [*Активация*], [*Нейронов*],
-  ),
+  table.header([*Эксперимент*], [*Обучающих объектов*], [*Активация*], [*Нейронов*]),
   [Базовый], [54 000], [ReLU], [48],
   [Сокращённый], [20 000], [tanh], [48],
 )
@@ -318,10 +326,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 #table(
   columns: (1.4fr, 1fr, 1fr, 1fr),
-  table.header(
-    [*Эксперимент*], [*Train accuracy*],
-    [*Validation accuracy*], [*Test accuracy*],
-  ),
+  table.header([*Эксперимент*], [*Train accuracy*], [*Validation accuracy*], [*Test accuracy*]),
   [Базовый], [98,79 %], [97,13 %], [97,21 %],
   [Сокращённый], [97,36 %], [94,87 %], [94,89 %],
 )
@@ -330,55 +335,31 @@ uv pip install --python .venv/bin/python -r requirements.txt
 
 Разрыв между train и validation accuracy составил около 1,65 процентного пункта у базовой модели и около 2,50 процентного пункта у модели на 20 000 изображениях. Это показывает, что на сокращённом наборе переобучение выражено сильнее.
 
-== Графики и файлы протоколов
+== Графики обучения
 
 График обучения базовой модели с ReLU:
 
 #figure(
-  image("results/full_relu/learning_curves.png", width: 100%)
+  image("results/full_relu/learning_curves.png", width: 100%),
 )
-
-#link("results/full_relu/learning_curves.png")[Открыть график базовой модели]
 
 График обучения модели tanh на 20 000 изображениях:
 
 #figure(
-  image("results/subset_20k_tanh/learning_curves.png", width: 100%)
+  image("results/subset_20k_tanh/learning_curves.png", width: 100%),
 )
-
-#link("results/subset_20k_tanh/learning_curves.png")[Открыть график модели tanh]
 
 График одного из запусков поиска для 48 нейронов:
 
 #figure(
-  image("results/search_48_seed_42/learning_curves.png", width: 100%)
+  image("results/search_48_seed_42/learning_curves.png", width: 100%),
 )
-
-#link("results/search_48_seed_42/learning_curves.png")[Открыть график поиска 48 нейронов]
 
 График запуска для 47 нейронов, который не прошёл критерий по минимальному результату пяти seed:
 
 #figure(
-  image("results/search_47_seed_46/learning_curves.png", width: 100%)
+  image("results/search_47_seed_46/learning_curves.png", width: 100%),
 )
-
-#link("results/search_47_seed_46/learning_curves.png")[Открыть график запуска 47 нейронов]
-
-Полный табличный протокол всех экспериментов:
-
-#link("results/summary.csv")[Открыть summary.csv]
-
-Сводные результаты в формате JSON:
-
-#link("results/summary.json")[Открыть summary.json]
-
-Метрики базового эксперимента:
-
-#link("results/full_relu/metrics.json")[Открыть metrics.json базовой модели]
-
-Метрики сокращённого эксперимента:
-
-#link("results/subset_20k_tanh/metrics.json")[Открыть metrics.json модели tanh]
 
 = Выводы по лабораторной работе
 

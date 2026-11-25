@@ -1,0 +1,12 @@
+{
+  "name": "full_relu",
+  "activation": "relu",
+  "hidden_neurons": 48,
+  "train_size": 54000,
+  "epochs": 30,
+  "train_accuracy": 0.9878518581390381,
+  "val_accuracy": 0.9713333249092102,
+  "test_accuracy": 0.972100019454956,
+  "overfitting_gap": 0.01651853322982788,
+  "parameters": 38170
+}

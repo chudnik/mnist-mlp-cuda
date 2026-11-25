@@ -1,0 +1,12 @@
+{
+  "name": "subset_20k_tanh",
+  "activation": "tanh",
+  "hidden_neurons": 48,
+  "train_size": 20000,
+  "epochs": 30,
+  "train_accuracy": 0.9736499786376953,
+  "val_accuracy": 0.9486666917800903,
+  "test_accuracy": 0.9488999843597412,
+  "overfitting_gap": 0.02498328685760498,
+  "parameters": 38170
+}
